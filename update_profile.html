@@ -321,13 +321,25 @@
     function populateForm(user, courts, rounds) {
         const form = document.getElementById('profileForm');
 
-        // Courts
+        // Courts Logic (Updated with filtering)
         const indoorSel = document.getElementById('indoor_pref');
         const outdoorSel = document.getElementById('outdoor_pref');
+        
+        // Reset (just in case)
+        indoorSel.innerHTML = '';
+        outdoorSel.innerHTML = '';
+
         courts.forEach(c => {
-            const opt = new Option(c.name, c.key);
-            indoorSel.add(opt.cloneNode(true));
-            outdoorSel.add(new Option(c.name, c.key));
+            // Helper to check boolean true/"TRUE"
+            const isIndoor = (c.indoor === true || String(c.indoor).toUpperCase() === 'TRUE');
+            const isOutdoor = (c.outdoor === true || String(c.outdoor).toUpperCase() === 'TRUE');
+
+            if (isIndoor) {
+                indoorSel.add(new Option(c.name, c.key));
+            }
+            if (isOutdoor) {
+                outdoorSel.add(new Option(c.name, c.key));
+            }
         });
 
         // Availability
@@ -360,19 +372,15 @@
             }
         });
 
-        // Last Updated Timestamp
         if (user.updated) {
             const d = new Date(user.updated);
-            // Check if valid date
             if (!isNaN(d.getTime())) {
                 document.getElementById('last-updated-text').innerText = "Last Profile Update: " + d.toLocaleString();
             }
         }
 
-        // Rounds Logic
         handleRounds(user, rounds);
 
-        // Stats
         document.getElementById('disp-rank').innerText = user.ladder_rank;
         document.getElementById('disp-rating').innerText = user.rating;
         document.getElementById('disp-active').innerText = user.ladder_active ? "Yes" : "No";
@@ -510,7 +518,6 @@
             if(result.status === 'success') {
                 showAlert('success', 'Profile updated successfully!');
                 markClean(); 
-                // Update the "Last Updated" text immediately without refreshing
                 document.getElementById('last-updated-text').innerText = "Last Profile Update: " + new Date().toLocaleString();
             } else {
                 throw new Error(result.message);
