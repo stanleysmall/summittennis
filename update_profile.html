@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summit Tennis Profile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding-top: 0px; padding-bottom: 100px; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .avail-cell { text-align: center; }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.9); z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .waiver-box {
+            height: 150px; overflow-y: scroll; background: #fff;
+            border: 1px solid #ced4da; padding: 10px; font-size: 0.85rem;
+            margin-bottom: 10px; border-radius: 4px;
+        }
+        .section-text { font-size: 0.9rem; color: #555; margin-bottom: 10px; }
+        .mandatory-notice { color: #dc3545; font-size: 0.9rem; font-weight: bold; margin-bottom: 10px; }
+        
+        .countdown-banner {
+            background-color: #343a40; color: #fff; padding: 15px;
+            text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 1.1rem;
+        }
+        .countdown-timer { color: #ffc107; font-family: monospace; font-size: 1.4rem; display: block; }
+
+        .unsaved-banner {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background-color: #dc3545; color: white;
+            padding: 15px; text-align: center;
+            font-weight: bold; z-index: 2000;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+            display: none; 
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading" class="loading-overlay">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<div id="countdown-banner" class="countdown-banner" style="display:none;">
+    Sign up for next round closes in:
+    <span id="timer" class="countdown-timer"></span>
+</div>
+
+<div id="unsaved-banner" class="unsaved-banner">
+    ⚠️ You have unsaved changes. Please scroll down and click the "Save Changes" button!
+</div>
+
+<div class="container" style="max-width: 800px; margin-top: 20px;">
+    <div class="text-center mb-4">
+        <h2>Summit Tennis Profile</h2>
+        <p class="text-muted">Manage your preferences, availability, and active rounds.</p>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <form id="profileForm" style="display:none;">
+        
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">Singles Ladder Rounds</div>
+            <div class="card-body">
+                <p class="section-text">
+                    Sign up for the upcoming round below. <br>
+                    <small class="text-muted">Note: Past rounds are shown for your records.</small>
+                </p>
+                <div id="rounds-container"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-light fw-bold">Personal Information</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">First Name</label>
+                        <input type="text" class="form-control" name="first_name" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" class="form-control" name="last_name" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Phone</label>
+                        <input type="tel" class="form-control" name="phone" pattern="[0-9]{10}" 
+                               title="Please enter a 10-digit phone number (numbers only)"
+                               oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-info">
+            <strong>Note:</strong> Your court preferences and availability will be shared with other players to help identify mutually available times. Please be as permissive as possible to ensure matches can be scheduled.
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-success text-white">Preferences</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Indoor Court</label>
+                        <select class="form-select" name="indoor_pref" id="indoor_pref"></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Outdoor Court</label>
+                        <select class="form-select" name="outdoor_pref" id="outdoor_pref"></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Surface</label>
+                        <select class="form-select" name="surface_pref">
+                            <option value="hard">Hard</option>
+                            <option value="clay">Clay</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-info text-white">Availability</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr class="text-center">
+                                <th></th>
+                                <th>Mon</th>
+                                <th>Tue</th>
+                                <th>Wed</th>
+                                <th>Thu</th>
+                                <th>Fri</th>
+                                <th>Sat</th>
+                                <th>Sun</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="row-m"><td>Morning</td></tr>
+                            <tr id="row-a"><td>Afternoon</td></tr>
+                            <tr id="row-e"><td>Evening</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">Commitment & Rules</div>
+            <div class="card-body">
+                <h6 class="fw-bold">Commitment</h6>
+                <p class="section-text">
+                    We ask that you’re able to commit to at least <strong>two matches within each round</strong>. 
+                    If that’s not possible, please wait and sign up for a different round that works with your schedule.
+                </p>
+                <p class="section-text text-danger">
+                    If you do not play at least one match in a round you will be removed from the next round. 
+                    A series of violations will result in a permanent ban from the ladder.
+                </p>
+                <a href="https://summittennis.org/ladder/info" target="_blank" class="btn btn-outline-dark btn-sm mt-2">View Full Ladder Rules</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-secondary text-white">Releases & Privacy</div>
+            <div class="card-body">
+                <p class="mandatory-notice">
+                    * You must accept the Release of Liability and the Privacy Policy to participate in the ladder.
+                </p>
+                <h6 class="fw-bold">Release of Liability</h6>
+                <div class="waiver-box">
+                    <strong>Release of Liability and Assumption of Risk</strong><br>
+                    By participating in the Summit County Singles Ladder, I acknowledge and agree to the following:<br>
+                    <strong>Assumption of Risk:</strong> I understand that tennis is a physical activity that involves risks, including but not limited to falls, contact with other players, or injuries related to weather and court conditions. I voluntarily assume all risks associated with participation.<br>
+                    <strong>Physical Condition:</strong> I certify that I am physically fit and have no medical condition that would prevent my safe participation in this ladder.<br>
+                    <strong>Waiver of Liability:</strong> I hereby release and hold harmless the organizers, any volunteers, and the owners/operators of the courts used for match play from any and all claims, liabilities, or injuries arising out of my participation in this ladder.<br>
+                    <strong>Personal Responsibility:</strong> I understand that scheduling and travel to various courts within Summit County are my responsibility. I agree to abide by the rules of the specific facilities where matches are played.<br>
+                    <strong>Emergency Treatment:</strong> In the event of an injury, I authorize the organizers or fellow participants to seek emergency medical treatment on my behalf if I am unable to do so, though I understand they are under no legal obligation to do so.<br>
+                    I have read this waiver and understand that by signing up for the ladder, I am giving up certain legal rights.
+                </div>
+                <div class="form-check mb-4">
+                    <input class="form-check-input" type="checkbox" name="liability" id="liabilityCheck">
+                    <label class="form-check-label" for="liabilityCheck">I have read and agree to the Release of Liability.</label>
+                </div>
+                <hr>
+                <h6 class="fw-bold">Privacy Policy</h6>
+                <p class="section-text">
+                    Your info will not be sold to third parties and will only be used to the extent to facilitate the ladder. 
+                    Users can request info deletion at any time by contacting the coordinators.
+                </p>
+                <div class="form-check mb-4">
+                    <input class="form-check-input" type="checkbox" name="privacy" id="privacyCheck">
+                    <label class="form-check-label" for="privacyCheck">I accept the Privacy Policy.</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-light">Profile Visibility</div>
+            <div class="card-body">
+                <p class="section-text">
+                    Your match info and ladder rank along with your first name and last initial will be published on the website 
+                    and in local tennis centers unless you opt out.
+                </p>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="publish" id="publishCheck" checked>
+                    <label class="form-check-label fw-bold" for="publishCheck">Publish Profile to Public Ladder</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-light border text-center">
+            <strong>Current Stats:</strong> 
+            Rank: <span id="disp-rank" class="badge bg-primary"></span> 
+            Rating: <span id="disp-rating" class="badge bg-secondary"></span> 
+            Active: <span id="disp-active" class="badge bg-success"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 btn-lg mb-2">Save Changes</button>
+        
+        <div class="text-center mb-5">
+            <small class="text-muted fst-italic" id="last-updated-text"></small>
+        </div>
+    </form>
+</div>
+
+<script>
+    // --------------------------------------------------------
+    // TODO: PASTE YOUR GOOGLE SCRIPT URL HERE
+    const API_URL = "https://script.google.com/macros/s/AKfycbw5yRg1olJfbyQw5RIwfSzkBm7nHqCG_8jeI5xeB7oliwo0B0KxxOUISG7wiAOb5ufO/exec"; 
+    // --------------------------------------------------------
+
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('id');
+    const userPass = params.get('password');
+    const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const times = ['m', 'a', 'e'];
+    let isDirty = false;
+
+    function parseDeadline(dateInput) {
+        if (!dateInput) return null;
+        let d = new Date(dateInput);
+        if (!isNaN(d.getTime())) return d;
+        if (typeof dateInput === 'string') {
+            const parts = dateInput.split('/');
+            if(parts.length === 3) {
+                const mm = parts[0].padStart(2, '0');
+                const dd = parts[1].padStart(2, '0');
+                const yyyy = parts[2];
+                return new Date(`${yyyy}-${mm}-${dd}T23:59:59`);
+            }
+        }
+        return null;
+    }
+
+    window.onload = async () => {
+        if(!userId || !userPass) {
+            showAlert('danger', 'Invalid Link. Please ensure you used the full magic link.');
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}?action=read&id=${encodeURIComponent(userId)}&password=${encodeURIComponent(userPass)}`);
+            const result = await response.json();
+
+            if(result.status !== 'success') throw new Error(result.message);
+
+            populateForm(result.user, result.courts, result.rounds);
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('profileForm').style.display = 'block';
+            
+            attachDirtyListeners();
+
+        } catch (error) {
+            showAlert('danger', 'Error loading profile: ' + error.message);
+            document.getElementById('loading').style.display = 'none';
+        }
+    };
+
+    function attachDirtyListeners() {
+        const form = document.getElementById('profileForm');
+        form.addEventListener('change', markDirty);
+        form.addEventListener('input', markDirty);
+        window.addEventListener('beforeunload', function (e) {
+            if (isDirty) {
+                e.preventDefault();
+                e.returnValue = ''; 
+            }
+        });
+    }
+
+    function markDirty() {
+        if (!isDirty) {
+            isDirty = true;
+            document.getElementById('unsaved-banner').style.display = 'block';
+        }
+    }
+
+    function markClean() {
+        isDirty = false;
+        document.getElementById('unsaved-banner').style.display = 'none';
+    }
+
+    function populateForm(user, courts, rounds) {
+        const form = document.getElementById('profileForm');
+
+        // Courts
+        const indoorSel = document.getElementById('indoor_pref');
+        const outdoorSel = document.getElementById('outdoor_pref');
+        courts.forEach(c => {
+            const opt = new Option(c.name, c.key);
+            indoorSel.add(opt.cloneNode(true));
+            outdoorSel.add(new Option(c.name, c.key));
+        });
+
+        // Availability
+        times.forEach(t => {
+            const tr = document.getElementById(`row-${t}`);
+            days.forEach(d => {
+                const colName = `${d}_${t}`;
+                const td = document.createElement('td');
+                td.className = 'avail-cell';
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.className = 'form-check-input';
+                chk.name = colName;
+                if(user[colName] === true || user[colName] === "TRUE") chk.checked = true;
+                td.appendChild(chk);
+                tr.appendChild(td);
+            });
+        });
+
+        // Inputs
+        Array.from(form.elements).forEach(el => {
+            if(el.name && user.hasOwnProperty(el.name)) {
+                if(el.type === 'checkbox') {
+                    if(!days.some(d => el.name.startsWith(d)) && !el.name.startsWith('round')) { 
+                         el.checked = (user[el.name] === true || user[el.name] === "TRUE");
+                    }
+                } else if(el.tagName === 'SELECT' || el.tagName === 'INPUT') {
+                    el.value = user[el.name];
+                }
+            }
+        });
+
+        // Last Updated Timestamp
+        if (user.updated) {
+            const d = new Date(user.updated);
+            // Check if valid date
+            if (!isNaN(d.getTime())) {
+                document.getElementById('last-updated-text').innerText = "Last Profile Update: " + d.toLocaleString();
+            }
+        }
+
+        // Rounds Logic
+        handleRounds(user, rounds);
+
+        // Stats
+        document.getElementById('disp-rank').innerText = user.ladder_rank;
+        document.getElementById('disp-rating').innerText = user.rating;
+        document.getElementById('disp-active').innerText = user.ladder_active ? "Yes" : "No";
+    }
+
+    function handleRounds(user, rounds) {
+        const container = document.getElementById('rounds-container');
+        const now = new Date();
+        let nextRoundFound = false;
+
+        if (!rounds || rounds.length === 0) {
+            container.innerHTML = "<em>No rounds information available.</em>";
+            return;
+        }
+        container.innerHTML = ""; 
+
+        rounds.forEach(round => {
+            const deadlineDate = parseDeadline(round.deadline);
+            if (!deadlineDate) return; 
+            if (deadlineDate.getHours() === 0) deadlineDate.setHours(23, 59, 59, 999);
+
+            const isDeadlinePast = now > deadlineDate;
+            let shouldShow = false;
+            let isLocked = false;
+
+            if (isDeadlinePast) {
+                shouldShow = true;
+                isLocked = true;
+            } else {
+                if (!nextRoundFound) {
+                    shouldShow = true;
+                    isLocked = false;
+                    nextRoundFound = true; 
+                    document.getElementById('countdown-banner').style.display = 'block';
+                    startTimer(deadlineDate);
+                } else {
+                    shouldShow = false;
+                }
+            }
+
+            if (!shouldShow) return; 
+
+            const div = document.createElement('div');
+            div.className = 'form-check form-switch mb-2';
+            
+            const input = document.createElement('input');
+            input.className = 'form-check-input';
+            input.type = 'checkbox';
+            input.name = round.key; 
+            input.id = `chk-${round.key}`;
+            input.style.transform = "scale(1.3)";
+            
+            if (user[round.key] === true || user[round.key] === "TRUE") {
+                input.checked = true;
+            }
+
+            if (isLocked) {
+                input.disabled = true;
+            }
+
+            const label = document.createElement('label');
+            label.className = 'form-check-label ms-3';
+            label.htmlFor = `chk-${round.key}`;
+            const roundName = round.key.replace(/(\d+)+/g, ' $1').replace(/^\w/, c => c.toUpperCase());
+            
+            let statusBadge = "";
+            if (isLocked) {
+                statusBadge = `<span class="badge bg-secondary">Closed</span>`;
+            } else {
+                statusBadge = `<span class="badge bg-success">Open</span>`;
+            }
+
+            const formatDate = (dStr) => {
+                 const d = parseDeadline(dStr);
+                 return d ? d.toLocaleDateString() : dStr;
+            };
+
+            label.innerHTML = `
+                <div style="line-height:1.2;">
+                    <strong>${roundName}</strong> ${statusBadge}<br>
+                    <small class="text-muted">${formatDate(round.start)} — ${formatDate(round.end)}</small>
+                </div>`;
+
+            div.appendChild(input);
+            div.appendChild(label);
+            container.appendChild(div);
+        });
+    }
+
+    function startTimer(deadlineDate) {
+        const timerEl = document.getElementById('timer');
+        function update() {
+            const now = new Date();
+            const diff = deadlineDate - now;
+            if (diff <= 0) {
+                timerEl.innerText = "CLOSED";
+                return;
+            }
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            timerEl.innerText = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+        }
+        update(); 
+        setInterval(update, 1000);
+    }
+
+    document.getElementById('profileForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const liabilityCB = document.getElementById('liabilityCheck');
+        const privacyCB = document.getElementById('privacyCheck');
+        if (!liabilityCB.checked || !privacyCB.checked) {
+            showAlert('danger', 'You must accept the Release of Liability and Privacy Policy to participate in the ladder. Your changes have not been saved.');
+            window.scrollTo(0, 0);
+            return;
+        }
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const formData = new FormData(e.target);
+        const data = {};
+        formData.forEach((value, key) => data[key] = value);
+        const allCheckboxes = e.target.querySelectorAll('input[type="checkbox"]');
+        allCheckboxes.forEach(chk => { if(!chk.disabled) data[chk.name] = chk.checked; });
+
+        try {
+            const payload = { id: userId, password: userPass, data: data };
+            const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+            const result = await response.json();
+            
+            if(result.status === 'success') {
+                showAlert('success', 'Profile updated successfully!');
+                markClean(); 
+                // Update the "Last Updated" text immediately without refreshing
+                document.getElementById('last-updated-text').innerText = "Last Profile Update: " + new Date().toLocaleString();
+            } else {
+                throw new Error(result.message);
+            }
+        } catch (error) {
+            showAlert('danger', 'Update failed: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+            window.scrollTo(0, 0);
+        }
+    };
+
+    function showAlert(type, msg) {
+        const div = document.createElement('div');
+        div.className = `alert alert-${type} alert-dismissible fade show`;
+        div.innerHTML = `${msg} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+        document.getElementById('alert-area').innerHTML = '';
+        document.getElementById('alert-area').appendChild(div);
+    }
+</script>
+
+</body>
+</html>
