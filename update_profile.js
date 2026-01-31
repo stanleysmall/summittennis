@@ -2,6 +2,7 @@ const SCRIPT_PROP = PropertiesService.getScriptProperties();
 const SHEET_PLAYERS = "Players";
 const SHEET_COURTS = "Courts";
 const SHEET_ROUNDS = "Rounds";
+// STRICTLY ENFORCE DENVER TIME
 const TIMEZONE = "America/Denver";
 
 function doGet(e) { return handleRequest(e); }
@@ -14,8 +15,6 @@ function handleRequest(e) {
   try {
     const doc = SpreadsheetApp.getActiveSpreadsheet();
     
-    // --- Helper: Clean Data Reader ---
-    // Trims all headers and string values to avoid whitespace issues
     function readSheetClean(sheetName) {
       const s = doc.getSheetByName(sheetName);
       if (!s) return [];
@@ -36,30 +35,36 @@ function handleRequest(e) {
       });
     }
 
-    // --- Helper: Robust Date Check ---
-    function isRoundOpen(deadlineStr) {
-      if (!deadlineStr) return false;
+    // --- STRICT DENVER TIME CHECK ---
+    function isRoundOpen(deadlineInput) {
+      if (!deadlineInput) return false;
       
-      // 1. Get Denver Time as Integer (YYYYMMDDHHmmss)
       const now = new Date();
-      const nowStr = Utilities.formatDate(now, TIMEZONE, "yyyyMMddHHmmss");
-      const nowNum = Number(nowStr);
+      let deadlineDate;
 
-      // 2. Parse Deadline cleanly
-      // Regex matches "01", "30", "2026" from "01/30/2026" or "1-30-26" etc.
-      const match = String(deadlineStr).match(/(\d+)[^0-9](\d+)[^0-9](\d+)/);
-      if (!match) return false; 
+      // Case 1: Input is already a Date Object (Cell format is Date/Time)
+      if (deadlineInput instanceof Date) {
+        // We assume the sheet timestamp IS Denver time.
+        // We format it to a string string "yyyy-MM-dd HH:mm:ss" in Denver Zone
+        const dateString = Utilities.formatDate(deadlineInput, TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+        // Then parse it back to get the absolute timestamp
+        deadlineDate = Utilities.parseDate(dateString, TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+      } 
+      // Case 2: Input is String (e.g. "1/31/2026 0:00:00")
+      else {
+        // We explicitly tell Google: "This string is in America/Denver time"
+        // Try common formats
+        deadlineDate = Utilities.parseDate(String(deadlineInput), TIMEZONE, "M/d/yyyy H:mm:ss");
+        if (!deadlineDate || isNaN(deadlineDate.getTime())) {
+           // Fallback try without seconds or specific formats if needed
+           deadlineDate = new Date(deadlineInput); 
+        }
+      }
 
-      // Assuming MM/DD/YYYY format based on your CSV
-      let mm = match[1].padStart(2, '0');
-      let dd = match[2].padStart(2, '0');
-      let yyyy = match[3];
-      if (yyyy.length === 2) yyyy = "20" + yyyy; // Handle 2-digit year
+      if (!deadlineDate || isNaN(deadlineDate.getTime())) return false;
 
-      // Create Deadline Integer (End of Day: 235959)
-      const deadlineNum = Number(`${yyyy}${mm}${dd}235959`);
-
-      return nowNum <= deadlineNum;
+      // Compare: Now (Server Time) <= Deadline (Denver Time)
+      return now.getTime() <= deadlineDate.getTime();
     }
 
     // 1. Handle GET
@@ -91,7 +96,6 @@ function handleRequest(e) {
       const authId = payload.id;
       const authPass = payload.password;
 
-      // Direct Sheet Access for Writing
       const sheet = doc.getSheetByName(SHEET_PLAYERS);
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
       const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
@@ -99,7 +103,6 @@ function handleRequest(e) {
       const idIndex = headers.indexOf("id");
       const passIndex = headers.indexOf("password");
 
-      // Find Row (using loose comparison after trim)
       const rowIndex = data.findIndex(row => 
         String(row[idIndex]).trim() === authId && 
         String(row[passIndex]).trim() === authPass
@@ -110,10 +113,10 @@ function handleRequest(e) {
       // --- BACKEND VALIDATION ---
       const rounds = readSheetClean(SHEET_ROUNDS);
       
-      // Sort rounds by deadline date (Using basic JS date parse for sort, robust enough usually)
+      // Sort rounds by deadline
       rounds.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
-      // Identify the ONE open round
+      // Find the ONE open round
       let openRoundKey = null;
       for (const r of rounds) {
         if (isRoundOpen(r.deadline)) {
@@ -122,32 +125,23 @@ function handleRequest(e) {
         }
       }
 
-      // Check incoming changes
       for (const key of Object.keys(updateData)) {
         if (key.startsWith('round')) {
-          
-          // If this key is NOT the open round, check if value actually changed
           if (key !== openRoundKey) {
              const colIdx = headers.indexOf(key);
-             if (colIdx === -1) continue; // Column doesn't exist, ignore
+             if (colIdx === -1) continue; 
 
              const currentVal = data[rowIndex][colIdx];
              const newVal = updateData[key];
-
-             // Normalize for boolean comparison
              const boolCurrent = (currentVal === true || String(currentVal).toUpperCase() === 'TRUE');
              const boolNew = (newVal === true || String(newVal).toUpperCase() === 'TRUE');
 
-             // Only throw if they are DIFFERENT (trying to edit)
              if (boolCurrent !== boolNew) {
-                // Determine reason for clearer error
                 let reason = "closed";
-                // Quick check if it's future
+                // If start is future, clarify
                 const r = rounds.find(rd => rd.key === key);
-                if (r) {
-                   const now = new Date();
-                   if (new Date(r.start) > now) reason = "not yet open";
-                }
+                if (r && new Date(r.start) > new Date()) reason = "not yet open";
+                
                 throw new Error(`You cannot change your status for ${key}. It is ${reason}.`);
              }
           }
@@ -160,19 +154,15 @@ function handleRequest(e) {
 
       for (const [key, value] of Object.entries(updateData)) {
         if (protectedFields.includes(key)) continue;
-        
         const colIndex = headers.indexOf(key);
         if (colIndex > -1) {
           let val = value;
-          // Ensure booleans are written as booleans, not strings
           if (val === 'true' || val === true) val = true;
           else if (val === 'false' || val === false) val = false;
-          
           rowToUpdate[colIndex] = val;
         }
       }
 
-      // Update Timestamp
       const updatedColIndex = headers.indexOf('updated');
       if (updatedColIndex > -1) {
         rowToUpdate[updatedColIndex] = new Date();
