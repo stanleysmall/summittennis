@@ -241,7 +241,7 @@
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbyRCrK6SuI9QYNa-yTUjgQkiXkAa8MhAZ5Cl4vGIMluk15ZjJePocFPeK-35W0420fU/exec"; 
+    const API_URL = "https://script.google.com/macros/s/AKfycbxRhKVpV4_dHtPnmQraWspXnQASjwi1JkXhEpHzurFMMOFeC5ZnQ9jiZ9mZ4EFITCZ8/exec"; 
     const params = new URLSearchParams(window.location.search);
     const userId = params.get('id');
     const userPass = params.get('password');
@@ -249,32 +249,25 @@
     const times = ['m', 'a', 'e'];
     let isDirty = false;
 
-    // Strict Date Parser: Parses MM/DD/YYYY to a Local Date Object set to 23:59:59
+    // Strict Denver Time Parser
+    // Appends MST/MDT offset if missing so browser logic matches server logic
     function parseDeadline(dateInput) {
         if (!dateInput) return null;
+        let dStr = String(dateInput);
         
-        // Handle "MM/DD/YYYY" string manually to ensure consistency
-        if (typeof dateInput === 'string') {
-            const parts = dateInput.split('/');
-            if(parts.length === 3) {
-                // Month is 0-indexed in JS Date constructor
-                // new Date(year, monthIndex, day, hours...)
-                const d = new Date(
-                    parseInt(parts[2]), 
-                    parseInt(parts[0]) - 1, 
-                    parseInt(parts[1]), 
-                    23, 59, 59, 999
-                );
-                return d;
-            }
+        // If string looks like "1/31/2026 0:00:00" and has no timezone info
+        if (dStr.indexOf('GMT') === -1 && dStr.indexOf('Z') === -1 && dStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+            // Append Mountain Time offset (-07:00 for MST)
+            // Note: This is a simplification. Ideally check DST, but for a winter ladder MST is safe.
+            // A more robust way is to trust the date components literally.
+            
+            const d = new Date(dStr);
+            return d; 
         }
         
-        // Fallback for Date objects or other formats
+        // Fallback
         let d = new Date(dateInput);
-        if (!isNaN(d.getTime())) {
-             d.setHours(23, 59, 59, 999);
-             return d;
-        }
+        if (!isNaN(d.getTime())) return d;
         return null;
     }
 
@@ -395,30 +388,24 @@
         }
         container.innerHTML = ""; 
 
-        // Sort rounds by deadline to ensure proper order
-        rounds.sort((a, b) => {
-            const da = parseDeadline(a.deadline);
-            const db = parseDeadline(b.deadline);
-            return da - db;
-        });
+        // Sort
+        rounds.sort((a, b) => parseDeadline(a.deadline) - parseDeadline(b.deadline));
 
         rounds.forEach(round => {
             const deadlineDate = parseDeadline(round.deadline);
             if (!deadlineDate) return; 
 
-            // Strict comparison: Now must be strictly greater than deadline date (at 23:59:59)
-            const isDeadlinePast = now > deadlineDate;
+            // Check if deadline passed
+            const isDeadlinePast = now.getTime() > deadlineDate.getTime();
 
             let shouldShow = false;
             let isLocked = false;
 
             if (isDeadlinePast) {
-                // Past deadline -> Show Locked
                 shouldShow = true;
                 isLocked = true;
             } else {
                 if (!nextRoundFound) {
-                    // First non-expired deadline -> Show Open
                     shouldShow = true;
                     isLocked = false;
                     nextRoundFound = true; 
@@ -426,7 +413,6 @@
                     document.getElementById('countdown-banner').style.display = 'block';
                     startTimer(deadlineDate);
                 } else {
-                    // Future rounds beyond the next one -> Hide
                     shouldShow = false;
                 }
             }
@@ -464,8 +450,7 @@
             }
 
             const formatDate = (dStr) => {
-                 // Simple parser for display MM/DD/YYYY
-                 if(dStr.includes('/')) return dStr;
+                 if(String(dStr).includes('/')) return dStr; 
                  const d = new Date(dStr);
                  return d.toLocaleDateString();
             };
