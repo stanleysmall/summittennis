@@ -250,22 +250,15 @@
     let isDirty = false;
 
     // Strict Denver Time Parser
-    // Appends MST/MDT offset if missing so browser logic matches server logic
     function parseDeadline(dateInput) {
         if (!dateInput) return null;
         let dStr = String(dateInput);
         
-        // If string looks like "1/31/2026 0:00:00" and has no timezone info
         if (dStr.indexOf('GMT') === -1 && dStr.indexOf('Z') === -1 && dStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
-            // Append Mountain Time offset (-07:00 for MST)
-            // Note: This is a simplification. Ideally check DST, but for a winter ladder MST is safe.
-            // A more robust way is to trust the date components literally.
-            
             const d = new Date(dStr);
             return d; 
         }
         
-        // Fallback
         let d = new Date(dateInput);
         if (!isNaN(d.getTime())) return d;
         return null;
@@ -395,7 +388,6 @@
             const deadlineDate = parseDeadline(round.deadline);
             if (!deadlineDate) return; 
 
-            // Check if deadline passed
             const isDeadlinePast = now.getTime() > deadlineDate.getTime();
 
             let shouldShow = false;
@@ -419,34 +411,25 @@
 
             if (!shouldShow) return; 
 
+            const isRegistered = (user[round.key] === true || String(user[round.key]).toUpperCase() === "TRUE");
+
             const div = document.createElement('div');
-            div.className = 'form-check form-switch mb-2';
+            div.className = 'mb-3 border p-3 rounded bg-white shadow-sm';
             
-            const input = document.createElement('input');
-            input.className = 'form-check-input';
-            input.type = 'checkbox';
-            input.name = round.key; 
-            input.id = `chk-${round.key}`;
-            input.style.transform = "scale(1.3)";
-            
-            if (user[round.key] === true || user[round.key] === "TRUE") {
-                input.checked = true;
-            }
+            // Hidden input to capture the registration status
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = round.key; 
+            hiddenInput.id = `hidden-${round.key}`;
+            hiddenInput.value = isRegistered ? "true" : "false";
 
-            if (isLocked) {
-                input.disabled = true;
-            }
-
-            const label = document.createElement('label');
-            label.className = 'form-check-label ms-3';
-            label.htmlFor = `chk-${round.key}`;
             const roundName = round.key.replace(/(\d+)+/g, ' $1').replace(/^\w/, c => c.toUpperCase());
             
             let statusBadge = "";
             if (isLocked) {
                 statusBadge = `<span class="badge bg-secondary">Closed</span>`;
             } else {
-                statusBadge = `<span class="badge bg-success">Open</span>`;
+                statusBadge = `<span class="badge bg-primary">Open</span>`;
             }
 
             const formatDate = (dStr) => {
@@ -455,14 +438,58 @@
                  return d.toLocaleDateString();
             };
 
-            label.innerHTML = `
+            const headerDiv = document.createElement('div');
+            headerDiv.style.marginBottom = '12px';
+            headerDiv.innerHTML = `
                 <div style="line-height:1.2;">
-                    <strong>${roundName}</strong> ${statusBadge}<br>
+                    <strong style="font-size: 1.1rem;">${roundName}</strong> ${statusBadge}<br>
                     <small class="text-muted">${formatDate(round.start)} — ${formatDate(round.end)}</small>
                 </div>`;
 
-            div.appendChild(input);
-            div.appendChild(label);
+            const actionDiv = document.createElement('div');
+            actionDiv.className = 'd-flex align-items-center';
+
+            // Interactive Button
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = isRegistered ? 'btn btn-outline-danger btn-sm' : 'btn btn-success btn-sm';
+            btn.innerText = isRegistered ? 'Unregister' : 'Register';
+
+            // Explicit Status Text
+            const statusSpan = document.createElement('span');
+            statusSpan.id = `status-${round.key}`;
+            statusSpan.className = isRegistered ? 'badge bg-success ms-3' : 'badge bg-secondary ms-3';
+            statusSpan.innerText = isRegistered ? 'Status: Registered' : 'Status: Not Registered';
+
+            if (isLocked) {
+                btn.disabled = true;
+                btn.className = 'btn btn-secondary btn-sm';
+            } else {
+                btn.onclick = () => {
+                    const currentlyRegistered = hiddenInput.value === "true";
+                    const newState = !currentlyRegistered;
+                    
+                    // Update hidden form value
+                    hiddenInput.value = newState ? "true" : "false";
+                    
+                    // Update Button UI
+                    btn.className = newState ? 'btn btn-outline-danger btn-sm' : 'btn btn-success btn-sm';
+                    btn.innerText = newState ? 'Unregister' : 'Register';
+                    
+                    // Update Status UI to reflect unsaved changes
+                    statusSpan.className = 'badge bg-warning text-dark ms-3';
+                    statusSpan.innerText = newState ? 'Unsaved Changes (Will be Registered)' : 'Unsaved Changes (Will be Unregistered)';
+                    
+                    markDirty();
+                };
+            }
+
+            actionDiv.appendChild(btn);
+            actionDiv.appendChild(statusSpan);
+
+            div.appendChild(hiddenInput);
+            div.appendChild(headerDiv);
+            div.appendChild(actionDiv);
             container.appendChild(div);
         });
     }
@@ -516,6 +543,20 @@
                 showAlert('success', 'Profile updated successfully!');
                 markClean(); 
                 document.getElementById('last-updated-text').innerText = "Last Profile Update: " + new Date().toLocaleString();
+                
+                // Clear the "Unsaved" text from the round status after a successful save
+                const roundInputs = document.querySelectorAll('input[type="hidden"]');
+                roundInputs.forEach(input => {
+                    if (input.name.startsWith('round')) {
+                        const isRegistered = input.value === "true";
+                        const statusSpan = document.getElementById(`status-${input.name}`);
+                        if (statusSpan) {
+                            statusSpan.className = isRegistered ? 'badge bg-success ms-3' : 'badge bg-secondary ms-3';
+                            statusSpan.innerText = isRegistered ? 'Status: Registered' : 'Status: Not Registered';
+                        }
+                    }
+                });
+
             } else {
                 throw new Error(result.message);
             }
