@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Looking to Play | Summit Tennis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding-top: 20px; padding-bottom: 50px; }
+        .player-card { box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; transition: transform 0.2s;}
+        .player-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .avail-block { font-size: 0.85rem; background: #e9ecef; padding: 10px; border-radius: 5px; }
+        .contact-info { font-size: 0.9rem; }
+        .loading-overlay { display: flex; justify-content: center; margin-top: 50px; }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 900px;">
+    <div class="text-center mb-4">
+        <h2>Looking to Play</h2>
+        <p class="text-muted">Reach out to players below to schedule practice hits or casual matches.</p>
+        <a href="https://summittennis.org/" class="btn btn-outline-secondary btn-sm">Back to Home</a>
+    </div>
+
+    <div id="loading" class="loading-overlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <div id="error-alert" class="alert alert-danger" style="display: none;"></div>
+
+    <div class="row" id="players-container">
+        </div>
+</div>
+
+<script>
+    // --------------------------------------------------------
+    // TODO: PASTE YOUR GOOGLE SCRIPT URL HERE
+    const API_URL = "https://script.google.com/macros/s/AKfycbxx-muMk8VSrAYCSM4ogSpxoA5MmogkzcN_N8RApuycmvxnoFkbknIY9p9Btkk85XQr/exec"; 
+    // --------------------------------------------------------
+
+    window.onload = async () => {
+        try {
+            const response = await fetch(`${API_URL}?action=get_looking`);
+            const result = await response.json();
+
+            if (result.status !== 'success') throw new Error(result.message || "Failed to load players.");
+
+            renderPlayers(result.data);
+            document.getElementById('loading').style.display = 'none';
+
+        } catch (error) {
+            document.getElementById('loading').style.display = 'none';
+            const errorAlert = document.getElementById('error-alert');
+            errorAlert.innerText = 'Error loading board: ' + error.message;
+            errorAlert.style.display = 'block';
+        }
+    };
+
+    function renderPlayers(players) {
+        const container = document.getElementById('players-container');
+        
+        if (players.length === 0) {
+            container.innerHTML = `<div class="col-12 text-center text-muted mt-4"><em>No one is currently listed on the board. Check back later!</em></div>`;
+            return;
+        }
+
+        players.forEach(player => {
+            const availHTML = formatAvailability(player.availability);
+            
+            const card = document.createElement('div');
+            card.className = 'col-md-6 col-lg-4';
+            card.innerHTML = `
+                <div class="card player-card h-100">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">${player.name}</h5>
+                        <span class="badge bg-light text-dark">Rating: ${player.rating}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="contact-info mb-3">
+                            <strong>📞 Phone:</strong> <a href="tel:${player.phone.replace(/\D/g,'')}">${player.phone}</a><br>
+                            <strong>✉️ Email:</strong> <a href="mailto:${player.email}">${player.email}</a>
+                        </div>
+                        <h6 class="text-muted mb-2" style="font-size: 0.85rem; text-transform: uppercase;">Availability</h6>
+                        <div class="avail-block">
+                            ${availHTML}
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function formatAvailability(avail) {
+        const days = [
+            {key: 'mon', label: 'Mon'}, {key: 'tue', label: 'Tue'}, {key: 'wed', label: 'Wed'},
+            {key: 'thu', label: 'Thu'}, {key: 'fri', label: 'Fri'}, {key: 'sat', label: 'Sat'}, {key: 'sun', label: 'Sun'}
+        ];
+        const times = [{key: 'm', label: 'Morn'}, {key: 'a', label: 'Aft'}, {key: 'e', label: 'Eve'}];
+
+        let result = [];
+        days.forEach(d => {
+            let availableTimes = [];
+            times.forEach(t => {
+                if (avail[`${d.key}_${t.key}`]) availableTimes.push(t.label);
+            });
+            if (availableTimes.length > 0) {
+                result.push(`<strong>${d.label}:</strong> ${availableTimes.join(', ')}`);
+            }
+        });
+
+        if (result.length === 0) return "<em>No specific availability provided.</em>";
+        return result.join('<br>');
+    }
+</script>
+
+</body>
+</html>
