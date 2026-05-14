@@ -16,6 +16,7 @@ describe('Time Parsing Logic', () => {
         expect(result).not.toBeNull();
         expect(result.getFullYear()).toBe(2026);
         expect(result.getMonth()).toBe(3); // Months are 0-indexed in JS (April = 3)
+        expect(result.getDate()).toBe(3);
     });
 
     test('Returns null for invalid input', () => {
