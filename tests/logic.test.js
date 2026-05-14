@@ -34,7 +34,7 @@ function parseDeadline(dateInput) {
 
 describe('Time Parsing Logic', () => {
     test('Correctly parses standard formatted dates', () => {
-        const result = parseDeadline("4/3/2026 0:00:00");
+        const result = parseDeadline("4/3/2026 00:00:00");
         expect(result).not.toBeNull();
         expect(result.getFullYear()).toBe(2026);
         expect(result.getMonth()).toBe(3); // Months are 0-indexed in JS (April = 3)
