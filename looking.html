@@ -9,9 +9,19 @@
         body { background-color: #f8f9fa; padding-top: 20px; padding-bottom: 50px; }
         .player-card { box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; transition: transform 0.2s;}
         .player-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .avail-block { font-size: 0.85rem; background: #e9ecef; padding: 10px; border-radius: 5px; }
+        .avail-block { background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #dee2e6;}
         .contact-info { font-size: 0.9rem; }
         .loading-overlay { display: flex; justify-content: center; margin-top: 50px; }
+        
+        /* Custom Table Styles */
+        .avail-table { font-size: 0.75rem; margin-bottom: 0; table-layout: fixed; }
+        .avail-table th { background-color: #f8f9fa; font-weight: bold; padding: 0.3rem; vertical-align: middle; }
+        .avail-table td { padding: 0.3rem; vertical-align: middle; height: 30px;}
+        .avail-match { background-color: #198754 !important; color: white !important; font-weight: bold;}
+        .avail-player { background-color: #0d6efd !important; color: white !important; font-weight: bold;}
+        .avail-legend { font-size: 0.8rem; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center;}
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-box { width: 14px; height: 14px; display: inline-block; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -32,7 +42,7 @@
     <div id="error-alert" class="alert alert-danger" style="display: none;"></div>
 
     <div class="row" id="players-container">
-        </div>
+    </div>
 </div>
 
 <script src="config.js"></script>
@@ -52,13 +62,19 @@
         document.getElementById('back-btn').href = `update_profile.html?id=${userId}&password=${userPass}`;
 
         try {
-            // Append credentials to the API request
-            const response = await fetch(`${CONFIG.API_URL}?action=get_looking&id=${encodeURIComponent(userId)}&password=${encodeURIComponent(userPass)}`);
-            const result = await response.json();
+            // Fetch both the public looking board and the current user's profile to compare schedules
+            const [lookingRes, profileRes] = await Promise.all([
+                fetch(`${CONFIG.API_URL}?action=get_looking&id=${encodeURIComponent(userId)}&password=${encodeURIComponent(userPass)}`),
+                fetch(`${CONFIG.API_URL}?action=read&id=${encodeURIComponent(userId)}&password=${encodeURIComponent(userPass)}`)
+            ]);
 
-            if (result.status !== 'success') throw new Error(result.message || "Failed to load players.");
+            const lookingResult = await lookingRes.json();
+            const profileResult = await profileRes.json();
 
-            renderPlayers(result.data);
+            if (lookingResult.status !== 'success') throw new Error(lookingResult.message || "Failed to load players.");
+            if (profileResult.status !== 'success') throw new Error(profileResult.message || "Failed to load profile.");
+
+            renderPlayers(lookingResult.data, profileResult.user);
             document.getElementById('loading').style.display = 'none';
 
         } catch (error) {
@@ -73,19 +89,22 @@
         errorAlert.style.display = 'block';
     }
 
-    function renderPlayers(players) {
+    function renderPlayers(players, currentUser) {
         const container = document.getElementById('players-container');
         
-        if (players.length === 0) {
-            container.innerHTML = `<div class="col-12 text-center text-muted mt-4"><em>No one is currently listed on the board. Check back later!</em></div>`;
+        // Filter out the current user so they don't see themselves on the board
+        const filteredPlayers = players.filter(p => p.email !== currentUser.email);
+        
+        if (filteredPlayers.length === 0) {
+            container.innerHTML = `<div class="col-12 text-center text-muted mt-4"><em>No other players are currently listed on the board. Check back later!</em></div>`;
             return;
         }
 
-        players.forEach(player => {
-            const availHTML = formatAvailability(player.availability);
+        filteredPlayers.forEach(player => {
+            const availHTML = formatAvailability(player.availability, currentUser);
             
             const card = document.createElement('div');
-            card.className = 'col-md-6 col-lg-4';
+            card.className = 'col-md-6 col-lg-6'; 
             card.innerHTML = `
                 <div class="card player-card h-100">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -108,26 +127,50 @@
         });
     }
 
-    function formatAvailability(avail) {
+    function formatAvailability(playerAvail, currentUser) {
         const days = [
-            {key: 'mon', label: 'Mon'}, {key: 'tue', label: 'Tue'}, {key: 'wed', label: 'Wed'},
-            {key: 'thu', label: 'Thu'}, {key: 'fri', label: 'Fri'}, {key: 'sat', label: 'Sat'}, {key: 'sun', label: 'Sun'}
+            {key: 'mon', label: 'M'}, {key: 'tue', label: 'T'}, {key: 'wed', label: 'W'},
+            {key: 'thu', label: 'T'}, {key: 'fri', label: 'F'}, {key: 'sat', label: 'S'}, {key: 'sun', label: 'S'}
         ];
         const times = [{key: 'm', label: 'Morn'}, {key: 'a', label: 'Aft'}, {key: 'e', label: 'Eve'}];
 
-        let result = [];
-        days.forEach(d => {
-            let availableTimes = [];
-            times.forEach(t => {
-                if (avail[`${d.key}_${t.key}`]) availableTimes.push(t.label);
+        let html = '<div class="table-responsive"><table class="table table-bordered text-center avail-table">';
+        html += '<thead><tr><th></th>';
+        days.forEach(d => html += `<th>${d.label}</th>`);
+        html += '</tr></thead><tbody>';
+
+        times.forEach(t => {
+            html += `<tr><th class="text-start">${t.label}</th>`;
+            days.forEach(d => {
+                const colKey = `${d.key}_${t.key}`;
+                const pAvail = playerAvail[colKey];
+                // Support both actual booleans and string 'TRUE' mappings from Sheets
+                const cAvail = currentUser[colKey] === true || String(currentUser[colKey]).toUpperCase() === 'TRUE';
+
+                let cellClass = '';
+                let cellContent = '';
+
+                if (pAvail && cAvail) {
+                    cellClass = 'avail-match';
+                    cellContent = '✓';
+                } else if (pAvail) {
+                    cellClass = 'avail-player';
+                    cellContent = '✓';
+                }
+
+                html += `<td class="${cellClass}">${cellContent}</td>`;
             });
-            if (availableTimes.length > 0) {
-                result.push(`<strong>${d.label}:</strong> ${availableTimes.join(', ')}`);
-            }
+            html += '</tr>';
         });
 
-        if (result.length === 0) return "<em>No specific availability provided.</em>";
-        return result.join('<br>');
+        html += '</tbody></table></div>';
+        html += `
+            <div class="avail-legend text-muted mt-2">
+                <div class="legend-item"><span class="legend-box avail-match"></span> Mutually Available</div>
+                <div class="legend-item"><span class="legend-box avail-player"></span> Player Available</div>
+            </div>
+        `;
+        return html;
     }
 </script>
 
