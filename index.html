@@ -16,7 +16,7 @@
         }
         header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             border-bottom: 2px solid #2c3e50;
             padding-bottom: 20px;
         }
@@ -25,20 +25,39 @@
             margin-bottom: 0.5rem;
             font-size: 1.8rem;
         }
+        .banner-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
         .status-banner {
             background-color: #e8f6f3;
             border: 1px solid #a2d9ce;
             color: #16a085;
-            padding: 10px;
+            padding: 15px;
             border-radius: 6px;
             display: inline-block;
-            font-weight: bold;
             margin-bottom: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .round-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #0e6655;
+            margin-bottom: 5px;
+            text-transform: capitalize;
         }
         .dates {
             font-size: 1rem;
-            color: #555;
-            margin-top: 5px;
+            color: #117864;
+            margin-bottom: 10px;
+        }
+        .countdown-timer { 
+            color: #d35400; 
+            font-family: monospace; 
+            font-size: 1.3rem; 
+            font-weight: bold;
+            display: block; 
         }
         h2 {
             color: #2980b9;
@@ -60,6 +79,11 @@
         strong {
             color: #2c3e50;
         }
+        .cta-container {
+            text-align: center;
+            margin-top: 20px;
+            margin-bottom: 30px;
+        }
         .cta-button {
             display: inline-block;
             background-color: #2980b9;
@@ -68,8 +92,7 @@
             text-decoration: none;
             border-radius: 6px;
             font-weight: bold;
-            margin-top: 20px;
-            text-align: center;
+            margin: 5px;
         }
         .cta-button:hover {
             background-color: #1a5276;
@@ -89,27 +112,36 @@
         }
     </style>
 </head>
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-3D7KQ1FWCS"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-3D7KQ1FWCS');
 </script>
+
 <body>
 
     <header>
         <h1>Summit County Tennis Singles Ladder</h1>
     </header>
 
+    <div class="banner-container" id="round-banner-container" style="display: none;">
+        <div class="status-banner">
+            <div class="round-title" id="disp-round-name"></div>
+            <div class="dates" id="disp-round-dates"></div>
+            <div>Sign up closes in: <span id="timer" class="countdown-timer"></span></div>
+        </div>
+    </div>
+
     <p class="intro">
         Join the local tennis community for a flexible, competitive singles ladder! This is a great way to find new opponents and get consistent match play across the county without the rigid schedule of a traditional league.
     </p>
 
-    <a href="/ladder/info" class="cta-button">View Ladder Rules</a>
-    <a href="/ladder/join" class="cta-button">Join the Singles Ladder</a>
+    <div class="cta-container">
+        <a href="/ladder/info" class="cta-button">View Ladder Rules</a>
+        <a href="/ladder/join" class="cta-button">Join the Singles Ladder</a>
+    </div>
 
     <h2>The Details</h2>
     <ul>
@@ -142,5 +174,65 @@
         &copy; 2026 Summit County Tennis Ladder 
     </div>
 
+    <script src="config.js"></script>
+    <script>
+        function parseDeadline(dateInput) {
+            if (!dateInput) return null;
+            let dStr = String(dateInput);
+            if (dStr.indexOf('GMT') === -1 && dStr.indexOf('Z') === -1 && dStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/)) {
+                return new Date(dStr); 
+            }
+            let d = new Date(dateInput);
+            if (!isNaN(d.getTime())) return d;
+            return null;
+        }
+
+        window.onload = async () => {
+            try {
+                const response = await fetch(`${CONFIG.API_URL}?action=get_active_round`);
+                const result = await response.json();
+
+                if (result.status === 'success' && result.data) {
+                    const round = result.data;
+                    const roundName = round.key.replace(/(\d+)+/g, ' $1');
+                    
+                    const dateOptions = { month: 'short', day: 'numeric' };
+                    const startText = new Date(round.start).toLocaleDateString('en-US', dateOptions);
+                    const endText = new Date(round.end).toLocaleDateString('en-US', dateOptions);
+                    const deadlineDate = parseDeadline(round.deadline);
+
+                    document.getElementById('disp-round-name').innerText = `Register for ${roundName}`;
+                    document.getElementById('disp-round-dates').innerText = `Match Play: ${startText} — ${endText}`;
+                    
+                    document.getElementById('round-banner-container').style.display = 'block';
+
+                    if (deadlineDate) {
+                        startTimer(deadlineDate);
+                    }
+                }
+            } catch (error) {
+                console.error("Could not load active round data:", error);
+            }
+        };
+
+        function startTimer(deadlineDate) {
+            const timerEl = document.getElementById('timer');
+            function update() {
+                const now = new Date();
+                const diff = deadlineDate - now;
+                if (diff <= 0) {
+                    timerEl.innerText = "Registration Closed";
+                    return;
+                }
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                timerEl.innerText = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+            }
+            update(); 
+            setInterval(update, 1000);
+        }
+    </script>
 </body>
 </html>
