@@ -1,0 +1,18 @@
+{
+  "name": "summittennis",
+  "version": "1.0.0",
+  "description": "Summit County Tennis Singles Ladder",
+  "main": "api.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint \"**/*.js\"",
+    "lint:html": "htmlhint \"**/*.html\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-googleappsscript": "^1.0.5",
+    "htmlhint": "^1.1.13",
+    "jest": "^29.7.0"
+  }
+}
