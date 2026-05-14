@@ -5,19 +5,46 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Contact Summit Tennis</title>
-</head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-3D7KQ1FWCS"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag() { dataLayer.push(arguments); }
-  gtag('js', new Date());
+  
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-3D7KQ1FWCS"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-3D7KQ1FWCS');
+  </script>
 
-  gtag('config', 'G-3D7KQ1FWCS');
-</script>
+  <style>
+    /* Reset margins and force the container to the full height of the screen */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100%;
+      overflow: hidden; /* This hides the main page scrollbar so only the form scrolls */
+      background-color: #ffffff; /* Matches Google Forms background */
+    }
+
+    /* Make the iframe fill the entire body */
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block; /* Removes the tiny vertical gap at the bottom */
+    }
+  </style>
+</head>
+
 <body>
-<iframe
-  src="https://docs.google.com/forms/d/e/1FAIpQLSdQgDzJB1xjPZBcWmur-AiKwPs8l7trh53Xcsa_fd4TL9msMw/viewform?embedded=true"
-  width="100%" height="100%" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
+
+  <iframe
+    src="https://docs.google.com/forms/d/e/1FAIpQLSdQgDzJB1xjPZBcWmur-AiKwPs8l7trh53Xcsa_fd4TL9msMw/viewform?embedded=true"
+    frameborder="0" 
+    marginheight="0" 
+    marginwidth="0">
+    Loading…
+  </iframe>
+
 </body>
 </html>
