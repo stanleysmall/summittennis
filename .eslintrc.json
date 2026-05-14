@@ -9,6 +9,27 @@
     "ecmaVersion": "latest",
     "sourceType": "module"
   },
+  "overrides": [
+    {
+      "files": ["api.js"],
+      "globals": {
+        "PropertiesService": "readonly",
+        "LockService": "readonly",
+        "SpreadsheetApp": "readonly",
+        "Utilities": "readonly",
+        "ContentService": "readonly"
+      },
+      "rules": {
+        "no-inner-declarations": "off"
+      }
+    },
+    {
+      "files": ["tests/**/*.test.js"],
+      "env": {
+        "jest": true
+      }
+    }
+  ],
   "rules": {
     "no-unused-vars": "warn",
     "no-console": "warn"
