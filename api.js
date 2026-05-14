@@ -88,10 +88,39 @@ function handleRequest(e) {
           rounds: rounds 
       })).setMimeType(ContentService.MimeType.JSON);
     }
+    
+    // 2. Handle GET (Public Active Round)
+    if (e.parameter.action === 'get_active_round') {
+      const rounds = readSheetClean(SHEET_ROUNDS);
+      rounds.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+      
+      let activeRound = null;
+      for (const r of rounds) {
+        if (isRoundOpen(r.deadline)) {
+          activeRound = r;
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ 
+          status: 'success', 
+          data: activeRound 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
 
-    // 2. Handle GET (Looking to Play Board)
+    // 3. Handle GET (Looking to Play Board)
     if (e.parameter.action === 'get_looking') {
+      const targetId = e.parameter.id;
+      const targetPass = e.parameter.password;
+      
+      // Check if credentials were provided
+      if (!targetId || !targetPass) throw new Error("Missing credentials");
+
       const players = readSheetClean(SHEET_PLAYERS);
+      
+      // Verify the user actually exists in the database
+      const isValidUser = players.some(p => p.id === targetId && p.password === targetPass);
+      if (!isValidUser) throw new Error("Unauthorized access. Invalid link.");
+
       const result = [];
       const availCols = ['mon_m', 'mon_a', 'mon_e', 'tue_m', 'tue_a', 'tue_e', 'wed_m', 'wed_a', 'wed_e', 'thu_m', 'thu_a', 'thu_e', 'fri_m', 'fri_a', 'fri_e', 'sat_m', 'sat_a', 'sat_e', 'sun_m', 'sun_a', 'sun_e'];
 
@@ -122,7 +151,7 @@ function handleRequest(e) {
       return ContentService.createTextOutput(JSON.stringify({ status: 'success', data: result })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 3. Handle POST (Profile Updates)
+    // 4. Handle POST (Profile Updates)
     if (e.postData) {
       const payload = JSON.parse(e.postData.contents);
       const updateData = payload.data;

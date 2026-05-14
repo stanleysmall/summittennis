@@ -20,7 +20,7 @@
     <div class="text-center mb-4">
         <h2>Looking to Play</h2>
         <p class="text-muted">Reach out to players below to schedule practice hits or casual matches.</p>
-        <a href="https://summittennis.org/" class="btn btn-outline-secondary btn-sm">Back to Home</a>
+        <a href="#" id="back-btn" class="btn btn-outline-secondary btn-sm">Back to Profile</a>
     </div>
 
     <div id="loading" class="loading-overlay">
@@ -35,15 +35,25 @@
         </div>
 </div>
 
+<script src="config.js"></script>
 <script>
-    // --------------------------------------------------------
-    // TODO: PASTE YOUR GOOGLE SCRIPT URL HERE
-    const API_URL = "https://script.google.com/macros/s/AKfycbxx-muMk8VSrAYCSM4ogSpxoA5MmogkzcN_N8RApuycmvxnoFkbknIY9p9Btkk85XQr/exec"; 
-    // --------------------------------------------------------
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('id');
+    const userPass = params.get('password');
 
     window.onload = async () => {
+        // Require Authentication Params
+        if(!userId || !userPass) {
+            showError('Unauthorized: Missing Magic Link credentials. Please use the link texted to you.');
+            return;
+        }
+
+        // Set the back button to include the credentials so they don't get locked out
+        document.getElementById('back-btn').href = `update_profile.html?id=${userId}&password=${userPass}`;
+
         try {
-            const response = await fetch(`${API_URL}?action=get_looking`);
+            // Append credentials to the API request
+            const response = await fetch(`${CONFIG.API_URL}?action=get_looking&id=${encodeURIComponent(userId)}&password=${encodeURIComponent(userPass)}`);
             const result = await response.json();
 
             if (result.status !== 'success') throw new Error(result.message || "Failed to load players.");
@@ -52,12 +62,16 @@
             document.getElementById('loading').style.display = 'none';
 
         } catch (error) {
-            document.getElementById('loading').style.display = 'none';
-            const errorAlert = document.getElementById('error-alert');
-            errorAlert.innerText = 'Error loading board: ' + error.message;
-            errorAlert.style.display = 'block';
+            showError('Error loading board: ' + error.message);
         }
     };
+
+    function showError(msg) {
+        document.getElementById('loading').style.display = 'none';
+        const errorAlert = document.getElementById('error-alert');
+        errorAlert.innerText = msg;
+        errorAlert.style.display = 'block';
+    }
 
     function renderPlayers(players) {
         const container = document.getElementById('players-container');
