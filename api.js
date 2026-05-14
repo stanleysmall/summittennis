@@ -67,7 +67,7 @@ function handleRequest(e) {
       return now.getTime() <= deadlineDate.getTime();
     }
 
-    // 1. Handle GET
+    // 1. Handle GET (Profile Read)
     if (e.parameter.action === 'read') {
       const targetId = e.parameter.id;
       const targetPass = e.parameter.password;
@@ -89,7 +89,40 @@ function handleRequest(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 2. Handle POST
+    // 2. Handle GET (Looking to Play Board)
+    if (e.parameter.action === 'get_looking') {
+      const players = readSheetClean(SHEET_PLAYERS);
+      const result = [];
+      const availCols = ['mon_m', 'mon_a', 'mon_e', 'tue_m', 'tue_a', 'tue_e', 'wed_m', 'wed_a', 'wed_e', 'thu_m', 'thu_a', 'thu_e', 'fri_m', 'fri_a', 'fri_e', 'sat_m', 'sat_a', 'sat_e', 'sun_m', 'sun_a', 'sun_e'];
+
+      players.forEach(p => {
+        const isLooking = p.looking === true || String(p.looking).toUpperCase() === 'TRUE';
+        
+        if (isLooking) {
+          let avail = {};
+          availCols.forEach(col => {
+             avail[col] = (p[col] === true || String(p[col]).toUpperCase() === 'TRUE');
+          });
+
+          // Format phone number nicely (XXX) XXX-XXXX
+          let rawPhone = String(p.phone || '').replace(/\D/g, '');
+          let phoneFmt = rawPhone.length === 10 ? `(${rawPhone.substring(0,3)}) ${rawPhone.substring(3,6)}-${rawPhone.substring(6,10)}` : rawPhone;
+          let lastInitial = p.last_name ? String(p.last_name).charAt(0) + "." : "";
+
+          result.push({
+            name: (p.first_name || "") + " " + lastInitial,
+            rating: p.rating || "N/A",
+            phone: phoneFmt,
+            email: p.email || "",
+            availability: avail
+          });
+        }
+      });
+
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', data: result })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3. Handle POST (Profile Updates)
     if (e.postData) {
       const payload = JSON.parse(e.postData.contents);
       const updateData = payload.data;
