@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summit Tennis - Courts</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎾</text></svg>" type="image/svg+xml">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px; /* Widened slightly to accommodate the bigger map */
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        
+        /* Filter Styles */
+        .filters-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .filter-select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 0.95rem;
+            background-color: white;
+            color: #333;
+            cursor: pointer;
+        }
+
+        #map {
+            height: 650px; /* Made the map significantly bigger */
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            z-index: 1;
+        }
+        .cta-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #2980b9;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .action-button {
+            background-color: #27ae60;
+        }
+        .action-button:hover {
+            background-color: #1e8449;
+        }
+        
+        /* Distance List Styles */
+        #closest-courts-container {
+            display: none;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+        }
+        #closest-courts-container h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.3rem;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .court-list-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .court-list-item:last-child {
+            border-bottom: none;
+        }
+        .court-name {
+            font-weight: bold;
+            color: #2980b9;
+        }
+        .court-distance {
+            color: #e67e22;
+            font-weight: bold;
+            white-space: nowrap;
+            margin-left: 15px;
+        }
+        .court-features {
+            font-size: 0.85em;
+            color: #7f8c8d;
+        }
+        .empty-state {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 10px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #777;
+            text-align: center;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="filters-container">
+        <select id="surface-filter" class="filter-select">
+            <option value="all">All Surfaces</option>
+            <option value="hard">Hard Courts</option>
+            <option value="clay">Clay Courts</option>
+            <option value="grass">Grass Courts</option>
+        </select>
+        
+        <select id="type-filter" class="filter-select">
+            <option value="all">Indoor & Outdoor</option>
+            <option value="indoor">Indoor</option>
+            <option value="outdoor">Outdoor</option>
+        </select>
+        
+        <select id="access-filter" class="filter-select">
+            <option value="all">Public & Private</option>
+            <option value="public">Public (Parks)</option>
+            <option value="private">Private (Clubs/Resorts)</option>
+        </select>
+    </div>
+
+    <div class="cta-container">
+        <button id="locate-btn" class="cta-button action-button">📍 Find Closest Courts</button>
+    </div>
+    
+    <div id="status-message" style="text-align: center; color: #d35400; margin-bottom: 15px; font-weight: bold;"></div>
+
+    <div id="map"></div>
+
+    <div id="closest-courts-container">
+        <h2>Closest Courts (Filtered)</h2>
+        <div id="courts-list"></div>
+    </div>
+
+    <div class="footer">
+        © 2026 Summit County Tennis Ladder 
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        const courtsData = [
+            { id: "keystone", name: "Keystone Tennis Center", public: false, indoor: true, outdoor: true, hard: true, clay: false, grass: false, lat: 39.6075769, lon: -105.9755482 },
+            { id: "breck", name: "Breckenridge Tennis Center", public: false, indoor: true, outdoor: true, hard: true, clay: true, grass: false, lat: 39.4968986, lon: -106.0511817 },
+            
+            // Corrected coordinates for Rainbow Park
+            { id: "rainbow", name: "Rainbow Park", public: true, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 39.6296, lon: -106.0713 },
+            
+            { id: "dillon", name: "Dillon Town Park", public: true, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 39.6300374, lon: -106.0465583 },
+            { id: "carter", name: "Carter Park", public: true, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 39.4782991, lon: -106.0394347 },
+            { id: "trent", name: "Trent Park", public: true, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 39.6525041, lon: -106.083686 },
+            { id: "pioneer", name: "Pioneer Park", public: true, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 40.1616701, lon: -107.1019756 },
+            { id: "copper", name: "Copper Mountain", public: false, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 39.502477, lon: -106.148809 },
+            { id: "ranch", name: "Keystone Ranch", public: false, indoor: false, outdoor: true, hard: true, clay: false, grass: false, lat: 39.586083, lon: -105.99287 }
+        ];
+
+        function getFeaturesString(court) {
+            const features = [];
+            features.push(court.public ? "Public" : "Private");
+            if (court.indoor) features.push("Indoor");
+            if (court.outdoor) features.push("Outdoor");
+            if (court.hard) features.push("Hard");
+            if (court.clay) features.push("Clay");
+            if (court.grass) features.push("Grass");
+            return features.join(' • ');
+        }
+
+        // Initialize Map
+        const map = L.map('map').setView([39.58, -106.05], 10);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+
+        const markersLayer = L.layerGroup().addTo(map);
+
+        let userLat = null;
+        let userLon = null;
+        let userMarker = null;
+
+        function getFilteredCourts() {
+            const surface = document.getElementById('surface-filter').value;
+            const type = document.getElementById('type-filter').value;
+            const access = document.getElementById('access-filter').value;
+
+            return courtsData.filter(court => {
+                let matchesSurface = true;
+                if (surface !== 'all') matchesSurface = court[surface] === true;
+                let matchesType = true;
+                if (type !== 'all') matchesType = court[type] === true;
+                let matchesAccess = true;
+                if (access !== 'all') {
+                    const isPublic = access === 'public';
+                    matchesAccess = court.public === isPublic;
+                }
+                return matchesSurface && matchesType && matchesAccess;
+            });
+        }
+
+        function updateView() {
+            const filteredCourts = getFilteredCourts();
+
+            markersLayer.clearLayers();
+            filteredCourts.forEach(court => {
+                const popupContent = `
+                    <div style="font-weight: bold; color: #2c3e50;">${court.name}</div>
+                    <div style="color: #117864; font-size: 0.9em; margin-bottom: 5px;">${getFeaturesString(court)}</div>
+                    <a href="http://googleusercontent.com/maps.google.com/3${court.lat},${court.lon}" target="_blank" style="font-size: 0.9em; text-decoration: underline;">Get Directions</a>
+                `;
+                L.marker([court.lat, court.lon]).addTo(markersLayer).bindPopup(popupContent);
+            });
+
+            if (userLat !== null && userLon !== null) {
+                renderClosestCourts(filteredCourts);
+            }
+        }
+
+        function renderClosestCourts(courts) {
+            const listContainer = document.getElementById('courts-list');
+            listContainer.innerHTML = ""; 
+            
+            if (courts.length === 0) {
+                listContainer.innerHTML = "<div class='empty-state'>No courts match your selected filters.</div>";
+                return;
+            }
+
+            courts.forEach(court => {
+                court.distance = calculateDistance(userLat, userLon, court.lat, court.lon);
+            });
+            courts.sort((a, b) => a.distance - b.distance);
+
+            courts.forEach(court => {
+                const item = document.createElement('div');
+                item.className = 'court-list-item';
+                item.innerHTML = `
+                    <div>
+                        <div class="court-name">${court.name}</div>
+                        <div class="court-features">${getFeaturesString(court)}</div>
+                    </div>
+                    <div class="court-distance">${court.distance.toFixed(1)} mi</div>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        document.getElementById('surface-filter').addEventListener('change', updateView);
+        document.getElementById('type-filter').addEventListener('change', updateView);
+        document.getElementById('access-filter').addEventListener('change', updateView);
+
+        updateView();
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 3958.8; 
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            return R * c; 
+        }
+
+        document.getElementById('locate-btn').addEventListener('click', () => {
+            const statusEl = document.getElementById('status-message');
+            
+            if (!navigator.geolocation) {
+                statusEl.textContent = "Geolocation is not supported by your browser.";
+                return;
+            }
+
+            statusEl.textContent = "Locating you...";
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    statusEl.textContent = "";
+                    userLat = position.coords.latitude;
+                    userLon = position.coords.longitude;
+
+                    if (userMarker) {
+                        map.removeLayer(userMarker);
+                    }
+                    const userIcon = L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+                    });
+
+                    userMarker = L.marker([userLat, userLon], {icon: userIcon})
+                        .addTo(map)
+                        .bindPopup("<b>You are here!</b>")
+                        .openPopup();
+
+                    document.getElementById('closest-courts-container').style.display = 'block';
+                    
+                    updateView();
+
+                    const filteredCourts = getFilteredCourts();
+                    if (filteredCourts.length > 0) {
+                        filteredCourts.forEach(c => c.distance = calculateDistance(userLat, userLon, c.lat, c.lon));
+                        filteredCourts.sort((a,b) => a.distance - b.distance);
+                        
+                        const bounds = L.latLngBounds(
+                            [userLat, userLon],
+                            [filteredCourts[0].lat, filteredCourts[0].lon]
+                        );
+                        map.fitBounds(bounds, { padding: [50, 50] });
+                    } else {
+                        map.setView([userLat, userLon], 11);
+                    }
+                },
+                (error) => {
+                    console.warn(`ERROR(${error.code}): ${error.message}`);
+                    statusEl.textContent = "Unable to retrieve your location. Please check your browser permissions.";
+                }
+            );
+        });
+    </script>
+</body>
+</html>
