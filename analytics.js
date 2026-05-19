@@ -1,3 +1,5 @@
+/* global CONFIG, dataLayer */
+
 // Load Google Analytics script
 const gaScript = document.createElement('script');
 gaScript.async = true;
